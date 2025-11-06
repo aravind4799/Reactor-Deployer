@@ -9,6 +9,8 @@ import { fileURLToPath } from "url";
 import path from "path";
 import { downloadS3Folder } from "./s3Downloader.js"; // Uses .js for Node.js ESM compatibility
 import { runBuildInDocker } from "./dockerBuild.js";
+import  {getAllFiles}  from "./fileupload.js";
+import s3Upload from "./s3upload.js";
 dotenv.config();
 export interface DeploymentMessage {
     id: string;
@@ -88,6 +90,24 @@ const startPolling = async () => {
 
               await downloadS3Folder(s3Prefix, localOutputPath);
               await runBuildInDocker(localOutputPath);
+
+              // Upload built files back to S3
+              const BuildFiles = path.join(
+                __dirname,
+                "output",
+                body.id,
+                "build"
+              );
+              const files = getAllFiles(BuildFiles);
+
+              console.log('Files:', files);
+
+              const uploadFiles = files.map((file) => {
+                return s3Upload(file.slice(__dirname.length + 1), file);
+              });
+
+              await Promise.allSettled(uploadFiles);
+
 
               console.log(
                 `All files for deployment ${body.id} downloaded.`
