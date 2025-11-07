@@ -7,19 +7,19 @@ import {
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import path from "path";
-import { downloadS3Folder } from "./s3Downloader.js"; // Uses .js for Node.js ESM compatibility
-import { runBuildInDocker } from "./dockerBuild.js";
-import  {getAllFiles}  from "./fileupload.js";
-import s3Upload from "./s3upload.js";
+
+import { startBuildAndWait } from "./codeBuild.js";
+
 dotenv.config();
+
 export interface DeploymentMessage {
-    id: string;
-    repoUrl: string;
+  id: string;
+  repoUrl: string;
 }
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --- 1. SQS Client Setup ---
+// SQS Client Setup
 const region = process.env.AWS_REGION as string;
 const accessKeyId = process.env.AWS_ACCESS_KEY_ID as string;
 const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY as string;
@@ -41,11 +41,11 @@ const sqsClient = new SQSClient({
 
 console.log("Deployment service started. Polling for messages...");
 
-// --- 2. The Infinite Polling Loop ---
+// --- 2. The Infinite Polling Loop  ---
 const startPolling = async () => {
   while (true) {
     try {
-      // --- 3. Poll for Messages ---
+      // --- 3. Poll for Messages  ---
       const receiveCommand = new ReceiveMessageCommand({
         QueueUrl: queueUrl,
         MaxNumberOfMessages: 1,
@@ -70,57 +70,39 @@ const startPolling = async () => {
           if (message.Body) {
             console.log("Raw Message Body:", message.Body);
 
+            let body: DeploymentMessage | undefined;
+
             try {
-              // Type assertion: We expect the body to be our defined message
-              const body = JSON.parse(message.Body) as DeploymentMessage;
-              console.log("Parsed ID:", body.id);
-              console.log("Parsed Repo:", body.repoUrl);
 
-              // --- START: DOWNLOAD LOGIC ---
-              const s3Prefix = `repos/${body.id}/`;
-              const localOutputPath = path.join(
-                __dirname,
-                "output",
-                body.id
-              );
+              body = JSON.parse(message.Body) as DeploymentMessage;
+              // This service no longer downloads or builds locally.
+              // It just tells CodeBuild to do the work.
+              console.log(`Triggering AWS CodeBuild project for ${body.id}...`);
 
-              console.log(
-                `Downloading files from S3 to: ${localOutputPath}`
-              );
-
-              await downloadS3Folder(s3Prefix, localOutputPath);
-              await runBuildInDocker(localOutputPath);
-
-              // Upload built files back to S3
-              const BuildFiles = path.join(
-                __dirname,
-                "output",
-                body.id,
-                "build"
-              );
-              const files = getAllFiles(BuildFiles);
-
-              console.log('Files:', files);
-
-              const uploadFiles = files.map((file) => {
-                return s3Upload(file.slice(__dirname.length + 1), file);
-              });
-
-              await Promise.allSettled(uploadFiles);
-
+              // The CodeBuild project will:
+              // 1. Pull source from S3 'repos/{body.id}/'
+              // 2. Run the build steps (install, build)
+              // 3. Upload artifacts to S3 'builds/{body.id}/'
+              await startBuildAndWait(body.id);
 
               console.log(
-                `All files for deployment ${body.id} downloaded.`
+                `CodeBuild finished successfully for ${body.id}.`
               );
-              // --- END: DOWNLOAD LOGIC ---
-            } catch (parseError) {
-              console.error("Error parsing message body:", parseError);
+
+            } catch (err) {
+  
+              // If the build fails, we log it but DON'T delete the SQS message.
+              // This lets it be retried or moved to a dead-letter queue.
+              console.error(`Build failed for ID ${body ? body.id : 'UNKNOWN'}:`, err);
+              // We 'continue' to skip the delete command
+              continue;
             }
           } else {
             console.log("Received message with no Body.");
           }
 
           // --- 5. CRITICAL: Delete the Message ---
+          // This will only be reached if the try block succeeds
           const deleteCommand = new DeleteMessageCommand({
             QueueUrl: queueUrl,
             ReceiptHandle: message.ReceiptHandle,
@@ -142,3 +124,4 @@ const startPolling = async () => {
 };
 
 startPolling();
+

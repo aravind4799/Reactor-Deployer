@@ -1,25 +1,23 @@
 {
-  "name": "deploy-service",
+  "name": "request-service",
   "version": "1.0.0",
-  "type": "module",
   "description": "",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "npx tsc -b && node dist/index.js"
+    "start": "tsc -b && node ./dist/index.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "type": "module",
   "dependencies": {
-    "@aws-sdk/client-codebuild": "^3.926.0",
-    "@aws-sdk/client-s3": "^3.925.0",
-    "@aws-sdk/client-sqs": "^3.925.0",
-    "@types/cors": "^2.8.19",
+    "@aws-sdk/client-s3": "^3.926.0",
     "@types/express": "^5.0.5",
-    "cors": "^2.8.5",
     "dotenv": "^17.2.3",
-    "express": "^5.1.0",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
     "typescript": "^5.9.3"
   }
 }
