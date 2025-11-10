@@ -7,7 +7,7 @@ This project is a fully-functional, deployment platform. It can take any public 
 It's built as a decoupled, event-driven system of microservices, orchestrated entirely on AWS.
 
 
-[![Project Demo](./docs/front_end.png)](./docs/reactor-deployer.mp4")
+[![Watch the Demo](./docs/front_end.png)](https://drive.google.com/file/d/1OqNimJaRMAVGvWG6MRoUFK-2TMWmRCsB/view)
 
 ## Table of Contents
 
